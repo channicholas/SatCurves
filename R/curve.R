@@ -15,7 +15,7 @@ singleOptim <- function(theta, minFunc, curveList){
 
   optTheta <- opt$par
   Iterator <- 1:ncol(curveList[[2]])
-  fittedValues <- final_predict(optTheta, Iterator, curveList[[2]], curveList[[3]], lm)
+  fittedValues <- final_predict(optTheta, Iterator, curveList[[2]], curveList[[3]], curveList[[4]])
   return(fittedValues)
 }
 
@@ -27,8 +27,8 @@ multipleOptim <- function(theta, minFunc, curveList){
   optThetaNLM <- c(opt$p1[2], opt$p2[2])
 
   Iterator <- 1:ncol(curveList[[2]])
-  fittedValuesCG <- final_predict(optThetaCG, Iterator, curveList[[2]], curveList[[3]], lm)
-  fittedValuesNLM <- final_predict(optThetaNLM, Iterator, curveList[[2]], curveList[[3]], lm)
+  fittedValuesCG <- final_predict(optThetaCG, Iterator, curveList[[2]], curveList[[3]], curveList[[4]])
+  fittedValuesNLM <- final_predict(optThetaNLM, Iterator, curveList[[2]], curveList[[3]], curveList[[4]])
 
   fittedValues <- list(fittedValuesCG, fittedValuesNLM)
   print(opt)
