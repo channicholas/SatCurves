@@ -1,3 +1,14 @@
+singleOptim_test <- function(theta, minFunc, curveList){
+  opt <- optim(theta, fn = paste(minFunc, '_test'), t = curveList, control = list(maxit = 1000, ndeps = 1),
+               method = "Nelder-Mead")
+  print(opt)
+
+  optTheta <- opt$par
+  Iterator <- 1:ncol(curveList[[2]])
+  fittedValues <- final_predict(optTheta, Iterator, curveList[[2]], curveList[[3]], curveList[[4]])
+  return(fittedValues)
+}
+
 
 s_curve_test <- function(df, y, x, startParams, factVars = ' ', lineVars = ' ',
                          seed = 1, minFunc = "rmse", optFunc = "optim"){
