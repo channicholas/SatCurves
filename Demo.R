@@ -1,125 +1,110 @@
 library(readr)
 library(optimr)
-source(paste0(getwd(), '/R/curve.R'))
-source(paste0(getwd(), '/R/plot.R'))
-source(paste0(getwd(), '/R/modelAnalytics.R'))
-source(paste0(getwd(), '/R/regFunctions.R'))
-# china gdp data Example 1:
-#https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/ML0101ENv3/labs/china_gdp.csv
-china_gdp <- read_csv(paste0(getwd(), "/Data/china_gdp.csv"))
-
-lm <- lm(Value ~ Year, china_gdp)
-summary(lm)
-# here we plot the linear model which doesn't show any trend in the data.
-plot(china_gdp$Year, china_gdp$Value)
-lines(china_gdp$Year, lm$fitted.values, col = 'red')
-
-# we set up to run a non-linear regression
-df <- china_gdp
-x <- 'Year'
-y <- 'Value'
-# here we choose rmse as our minimizing function the other option is mae
-# this also just runs Nelder-Mead optimization
-fitted1 <- s_curve(china_gdp, y = y, x = x, startParams = c(25,5),
-                   minFunc = "rmse", optFunc = "singleOptim")
-# when we plot it you can see the improvement compared to the linear regression.
-# there still looks like it may be a little under fit. I will need to look more
-# into this
-plot(china_gdp$Year, china_gdp$Value)
-lines(china_gdp$Year, lm$fitted.values, col = 'red')
-lines(china_gdp$Year, fitted1, col = 'blue')
-
-# this is showing a fit using the mulitple optim, this will run the
-# CG and nlminb methods from optimr package, the output is a list of vectors
-fitted2 <- s_curve(china_gdp, y = y, x = x, startParams = c(65,5),
-                   minFunc = "rmse", optFunc = "multipleOptim")
-lines(china_gdp$Year, fitted2[[1]], col = 'green')
-lines(china_gdp$Year, fitted2[[2]], col = 'yellow')
-
-# here you can use the rsq function to analyze how well it did in terms of r^2
-rsq(fitted1, china_gdp$Value)
-rsq(lm$fitted.values, china_gdp$Value)
-rsq(fitted2[[1]], china_gdp$Value)
-rsq(fitted2[[2]], china_gdp$Value)
-
+library(car)
+library(MASS)
+source(paste0(getwd(), '/R/Improve/Sat_Transformation.R'))
+source(paste0(getwd(), '/R/Improve/Sat_Optimizer.R'))
+source(paste0(getwd(), '/R/Improve/Sat_Analytics.R'))
 
 
 ### S-curves###
 set.seed(1)
-predictor <- seq(0,5,.05)
-mu <- 2.5; s <- .75
+
+predictor <- seq(0,6,.05)
+mu <- 3; s <- .75
 response <- pnorm(predictor, mu, s) * 20000 + rnorm(length(predictor), 1000, 900)  # generating a sigmoid (s-curve)
 sig_df <- data.frame(predictor,response)
 sig_df$predictor <- sig_df$predictor * 2500
 lmSigmoid <- lm(response ~ predictor, sig_df)
 
 
-y <- 'response'
-x <- 'predictor'
-df <- sig_df
-fitted3 <- s_curve(df, y = y, x = x, startParams = c(2,.02),
-                   minFunc = "mae", optFunc = "singleOptim") # returning same number?
-# fitted3 <- as.vector(fitted3)
+formula <- formula(response~predictor)
+
+(sat_obj_sig <- Curve_Reg(temp_df = sig_df, formula = formula,
+                          curveVars = 'predictor', response = 'response',
+                          startParams = c(8,.55), optFunc = "aic"))
+
+# when we plot it you can see the improvement compared to the linear regression.
 
 plot(sig_df$predictor, sig_df$response)
-lines(sig_df$predictor, lmSigmoid$fitted.values)
-lines(sig_df$predictor, fitted3, col = 'red')
+lines(sig_df$predictor, sat_obj_sig$linear_model$fitted.values, col = 'blue')
+lines(sig_df$predictor, lmSigmoid$fitted.values, col = 'red')
 
-rsq(lm$fitted.values, sig_df$response); rsq(fitted3, sig_df$response);
+# below you can see the power in prediction with the linear regression
+# in-sample results vs the out of sample saturation curve.
+# this dataframe is with a normal linear regression
+error <- fitted(lmSigmoid) - sig_df$response
+cbind(MAE = mean(abs(error)),
+      RMSE = sqrt(mean(error^2)),
+      RSQ = rsq(fitted(lmSigmoid), sig_df$response))
 
-
+Cross_Validation(sat_obj_sig, startParams = c(8,.55)) # this is with the curve
 
 ### C-curve
 set.seed(1)
-predictor <- seq(1,6,.05)
-mu <- 2.5; s <- .75
-response <- log(predictor) * 20000 + log(rnorm(length(predictor), 1500, 300))  # generating a sigmoid (s-curve)
-sig_df <- data.frame(predictor,response)
-sig_df$predictor <- sig_df$predictor * 2500
-lmSigmoid <- lm(response ~ predictor, sig_df)
+predictor <- 1:100
+# Add random noise to the sequence
+variance <- rnorm(n, mean = 500, sd = 50)
+response <- log(predictor) * 1000 + variance
+log_df <- data.frame(predictor,response)
+lmLog<- lm(response ~ predictor, log_df)
 
+formula <- formula(response~predictor)
 
-y <- 'response'
-x <- 'predictor'
-df <- sig_df
-fitted4 <- s_curve(df, y = y, x = x, startParams = c(.5,.25),
-                   minFunc = "mae", optFunc = "singleOptim") # returning same number?
-# fitted3 <- as.vector(fitted3)
+(sat_obj_log <- Curve_Reg(temp_df = log_df, formula = formula,
+                          curveVars = 'predictor', response = 'response',
+                          startParams = c(-1,.1), optFunc = "mae"))
 
-plot(sig_df$predictor, sig_df$response)
-lines(sig_df$predictor, lmSigmoid$fitted.values)
-lines(sig_df$predictor, fitted4, col = 'red')
+plot(log_df$predictor, log_df$response)
+lines(log_df$predictor, lmLog$fitted.values, col = 'blue')
+lines(log_df$predictor, sat_obj_log$linear_model$fitted.values, col = 'red')
+# below you can see the power in prediction with the linear regression
+# in-sample results vs the out of sample saturation curve.
+# this dataframe is with a normal linear regression
+error <- fitted(lmLog) - log_df$response
+cbind(MAE = mean(abs(error)),
+      RMSE = sqrt(mean(error^2)),
+      RSQ = rsq(fitted(lmLog), log_df$response))
 
-rsq(lm$fitted.values, sig_df$response); rsq(fitted3, sig_df$response);
-
-
+Cross_Validation(sat_obj_log, startParams = c(sat_obj_log$alphas, sat_obj_log$gammas)) # this is with the curve
 
 
 
 #### Salary Prediction
 # https://www.kaggle.com/code/ibrahimyildiz/salary-predict-with-nonlinear-regression-models/data
-# salary_df <- data.frame(read_csv('Hitters.csv'))
-# salary_df <- salary_df[!is.na(salary_df$Salary),]
-# salary_df$League <- factor(salary_df$League)
-# salary_df$Division <- factor(salary_df$Division)
 #
-# y <- 'Salary'
-# x <- c('HmRun', 'Years', 'Hits', 'Runs')
-# df <- salary_df
-# factVars <- c('League', 'Division')
-# # rm(lineVars)
-# lineVars <-  c()
-# lm <- lm(Salary ~ HmRun + Years + League + Division + Hits + Runs, data = salary_df)
-# fitted <- s_curve(salary_df, y, x, factVars, seed = 1,
-#                   startParams = c(25,5,25,5,25,5,25,5),
-#                   minFunc = "rmse", optFunc = "singleOptim")
-# hist(salary_df$Salary)
-# plot(salary_df$HmRun, salary_df$Salary)
-# plot(salary_df$HmRun, salary_df$Years)
-#
-#
-# # pairs(salary_df[-c(14,15,20)])
-# rsq(fitted,salary_df$Salary)
-# rsq(lm$fitted.values, salary_df$Salary)
+salary_df <- data.frame(read.csv(paste0(getwd(), '/Data/Hitters.csv')))
+salary_df <- salary_df[!is.na(salary_df$Salary),]
+salary_df$League <- factor(salary_df$League)
+salary_df$Division <- factor(salary_df$Division)
 
+y <- 'Salary'
+x <- c('HmRun', 'Years', 'Hits', 'Runs')
 
+lm <- lm(Salary ~ HmRun + Years + League + Division + Hits + Runs, data = salary_df)
+lm <- lm(Salary ~ ., data = salary_df)
+
+step.model <- stepAIC(lm, direction='backward')
+
+vif(lm(Salary ~ AtBat + Hits + Walks + CAtBat + CRuns +
+         CRBI + CWalks + Division + PutOuts + Assists, salary_df))
+#removing CAtBat, AtBat, CRuns, CWalks
+###### Note I should build in the ability to do LASSO regression
+lm_salary <- lm(Salary ~ Hits + Walks + CRBI + Division + PutOuts + Assists, salary_df)
+avPlots(lm_salary) # it looks like most are linear with the exception of CRBI and maybe Hits
+
+formula <- formula(Salary ~ Hits + Walks + CRBI + Division + PutOuts + Assists)
+
+(sat_obj_sal <- Curve_Reg(temp_df = salary_df, formula = formula,
+                          curveVars = c('CRBI', 'Hits'), response = 'Salary',
+                          startParams = c(-.5, 3,.5, .55), optFunc = "aic"))
+
+# below you can see the power in prediction with the linear regression
+# in-sample results vs the out of sample saturation curve.
+# this dataframe is with a normal linear regression
+error <- fitted(lm_salary) - salary_df$Salary
+cbind(MAE = mean(abs(error)),
+      RMSE = sqrt(mean(error^2)),
+      RSQ = rsq(fitted(lm_salary), salary_df$Salary))
+
+Cross_Validation(sat_obj_sal, startParams = c(sat_obj_sal$alphas, sat_obj_sal$gammas)) # this is with the curve
